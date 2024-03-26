@@ -73,6 +73,26 @@ class Product(BaseModel):
     def __str__(self):
         return "{} {}".format(self.p_name, self.p_title)
 
+    @property
+    def discounted_price(self):
+        return self.prize * (1 - self.offer / 100)
+
+    def save(self, *args, **kwargs):
+        self.offer = self.prize * (1 - self.offer / 100)
+        super().save(*args, **kwargs)
+
+
+class CartItem(BaseModel):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='cart_items')
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='cart_items')
+    quantity = models.PositiveIntegerField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return "{}".format(self.product)
+
 
 class Order(BaseModel):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='order')

@@ -1,9 +1,11 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import UserSerializers, UserLoginSerializers, ProductSerializers, AddToCartSerializers
+from .serializers import UserSerializers, UserLoginSerializers, ProductSerializers
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from .models import Product
+from .models import Product, CartItem
+from .services import fetch_cart_items
+from django.shortcuts import get_object_or_404
 
 
 # Create your views here.
@@ -70,21 +72,34 @@ class RetriveProductsView(APIView):
 
 
 class AddToCartAPIView(APIView):
-    def post(self, request):
-        serializer = AddToCartSerializers(data=request.data)
-        if serializer.is_valid():
-            product_id = serializer.validated_data['product_id']
-            quantity = serializer.validated_data['quantity']
+    permission_classes = (IsAuthenticated,)
 
+    def post(self, request):
+        product_id = request.data.get('product_id')
+        try:
+            product = get_object_or_404(Product, pk=product_id)
             if 'cart' not in request.session:
                 request.session['cart'] = {}
-            if str(product_id) in request.session['cart']:
-                request.session['cart'][str(product_id)] += quantity
-            else:
-                request.session['cart'][str(product_id)] = quantity
 
-            return Response({"success": True, "message": "Item added to cart"}, status=status.HTTP_200_OK)
-        return Response({'success': False, 'message': serializer.error_messages}, status=status.HTTP_400_BAD_REQUEST)
+            cart = request.session['cart']
+
+            if product_id in cart:
+                cart[product_id]['quantity'] += 1
+            else:
+                cart[product_id] = {
+                    'name': product.p_name,
+                    'price': str(product.prize),
+                    'quantity': 1,
+                }
+            request.session['cart'] = cart
+            cart_item, created = CartItem.objects.get_or_create(product=product, user=request.user)
+            if not created:
+                cart_item.quantity += 1
+                cart_item.save()
+            return Response({"success": False, 'message': "Items is Added in the the cart."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        except Exception as err:
+            return Response({'error': err.args[0]})
 
 
 class FetchCartItemView(APIView):
@@ -94,12 +109,27 @@ class FetchCartItemView(APIView):
     """
 
     def get(self, request, *args, **kwargs):
-        user = request.user
-        cart_items = self.get_cart_items(user)
+        cart_items = fetch_cart_items(request)
+        return Response({'success': True, 'data': cart_items}, status=status.HTTP_200_OK)
 
-        serializer = AddToCartSerializers(cart_items, many=True)
-        return Response(serializer.data)
 
-    def get_cart_items(self, user):
-        cart_items = user.cart_items.all()
-        return cart_items
+class RemoveCartItemView(APIView):
+    permission_classes = (IsAuthenticated,)
+    """
+        This View is used for the Remove Cart Items
+    """
+
+    def post(self, request, product_id):
+        try:
+            cart_items = request.session.get('cart', {})
+
+            if str(product_id) in cart_items:
+                del cart_items[str(product_id)]
+                request.session['cart'] = cart_items
+                return Response({'success': True, 'message': 'Item removed from cart successfully.'},
+                                status=status.HTTP_200_OK)
+            else:
+                return Response({'success': False, 'error': 'Product not found in cart.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

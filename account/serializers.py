@@ -83,7 +83,7 @@ class ProductSerializers(serializers.ModelSerializer):
             amount = obj.prize
             discount_amount = amount * (discount / 100)
             final_amount = amount - discount_amount
-            return {'discount_amount': discount_amount, 'final_amount': final_amount,
+            return {'discount_amount': discount_amount, 'final_amount': f"{final_amount:.1f} {obj.quantity_type}",
                     'discount_percentage': f"{discount} %"}
         except Exception as err:
             raise serializers.ValidationError({'error': err.args[0]})
@@ -93,22 +93,7 @@ class ProductSerializers(serializers.ModelSerializer):
         return instance
 
 
-class AddToCartSerializers(serializers.Serializer):
-    product_id = serializers.IntegerField()
-    quantity = serializers.IntegerField()
-
-    def validate(self, data):
-        user = self.context['request'].user
-        try:
-            product = Product.objects.get(pk=data['product_id'])
-        except Product.DoesNotExist:
-            raise serializers.ValidationError("Product does not exist.")
-
-        if data['quantity'] <= 0:
-            raise serializers.ValidationError("Quantity should be positive.")
-
-        if data['quantity'] > product.available:
-            raise serializers.ValidationError("Insufficient quantity available.")
-
-        return data
-
+class CartItemSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = CartItem
+        fields = "__all__"

@@ -8,4 +8,5 @@ urlpatterns = [
     path('fetch-products', views.RetriveProductsView.as_view()),
     path('add-cart', views.AddToCartAPIView.as_view()),
     path('fetch/cart-item', views.FetchCartItemView.as_view()),
+    path('remove/cart-item/<int:product_id>', views.RemoveCartItemView.as_view()),
 ]
